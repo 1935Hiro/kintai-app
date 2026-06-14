@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="勤怠">
+  <link rel="manifest" href="manifest.json">
+  <title>勤怠記録</title>
+  <style>
+    /* ===== Reset & Base ===== */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ===== Tab Bar ===== */
+    #tab-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      background: #fff;
+      border-top: 1px solid #e8e8e8;
+      display: flex;
+      z-index: 100;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      border: none;
+      background: none;
+      font-size: 10px;
+      color: #bbb;
+      cursor: pointer;
+      padding-top: 6px;
+    }
+    .tab-btn.active { color: #27ae60; }
+    .tab-btn .icon { font-size: 22px; line-height: 1; }
+
+    /* ===== Pages ===== */
+    .page {
+      display: none;
+      flex: 1;
+      padding: 24px 20px 80px;
+      max-width: 500px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .page.active { display: flex; flex-direction: column; }
+
+    /* ===== Page Header ===== */
+    .page-header { margin-bottom: 24px; }
+    .page-title { font-size: 24px; font-weight: 700; color: #1a1a1a; }
+    .page-sub { font-size: 13px; color: #999; margin-top: 2px; }
+
+    /* ===== Today Tab ===== */
+    .time-card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .time-item { text-align: center; }
+    .time-label { font-size: 11px; color: #aaa; margin-bottom: 6px; font-weight: 600; letter-spacing: 0.05em; }
+    .time-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1a1a1a;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .time-value:active { background: #f0f0f0; }
+    .time-value.empty { color: #ddd; }
+    .time-divider { font-size: 24px; color: #ddd; font-weight: 300; }
+
+    .btn-row { display: flex; flex-direction: column; gap: 14px; }
+    .btn {
+      padding: 22px 16px;
+      font-size: 20px;
+      font-weight: 700;
+      border: none;
+      border-radius: 18px;
+      cursor: pointer;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+      transition: transform 0.1s, box-shadow 0.1s;
+      letter-spacing: 0.03em;
+    }
+    .btn:active { transform: scale(0.97); box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+    .btn-start { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+    .btn-end   { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+    .btn-disabled { opacity: 0.4; pointer-events: none; }
+
+    .status-msg {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+      min-height: 20px;
+    }
+
+    /* ===== Calendar Tab ===== */
+    .cal-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .cal-nav-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 24px; color: #aaa; padding: 8px; line-height: 1;
+    }
+    .cal-month-label { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+    .cal-day-name {
+      text-align: center;
+      font-size: 10px;
+      color: #bbb;
+      font-weight: 600;
+      padding: 4px 0;
+    }
+    .cal-cell {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      position: relative;
+      transition: background 0.15s;
+    }
+    .cal-cell:active { background: #e8e8e8; }
+    .cal-cell.weekend { color: #ccc; cursor: default; }
+    .cal-cell.holiday { color: #ccc; cursor: default; }
+    .cal-cell.recorded { color: #27ae60; background: #edfaf3; }
+    .cal-cell.today {
+      background: #27ae60 !important;
+      color: #fff !important;
+    }
+    .cal-cell.empty { cursor: default; }
+    .cal-dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: #27ae60;
+      margin-top: 2px;
+    }
+    .cal-cell.today .cal-dot { background: rgba(255,255,255,0.7); }
+
+    .record-list { display: flex; flex-direction: column; gap: 8px; }
+    .record-item {
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    }
+    .record-date { font-size: 13px; font-weight: 600; color: #555; }
+    .record-times { font-size: 14px; font-weight: 700; color: #27ae60; }
+    .record-times.partial { color: #f39c12; }
+    .record-edit-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 18px; padding: 4px; color: #ccc;
+    }
+
+    /* ===== Levtech Tab ===== */
+    .section-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+    }
+    .section-card-title {
+      font-size: 11px;
+      color: #aaa;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 10px;
+    }
+    .url-row { display: flex; gap: 8px; align-items: center; }
+    .url-input {
+      flex: 1;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #333;
+      background: #f9f9f9;
+      outline: none;
+    }
+    .url-input:focus { border-color: #27ae60; background: #fff; }
+    .url-save-btn {
+      background: #27ae60;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .url-hint { font-size: 11px; color: #bbb; margin-top: 6px; }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #555;
+      padding: 5px 0;
+      border-bottom: 1px solid #f5f5f5;
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-val { font-weight: 700; }
+    .summary-val.ok { color: #27ae60; }
+    .summary-val.warn { color: #e74c3c; }
+
+    .warn-box {
+      background: #fff8e1;
+      border-left: 3px solid #f39c12;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #b8860b;
+      margin-bottom: 16px;
+    }
+
+    .btn-copy {
+      display: block; width: 100%;
+      padding: 18px;
+      background: linear-gradient(135deg, #3498db, #2980b9);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(52,152,219,0.3);
+      margin-bottom: 10px;
+      transition: transform 0.1s;
+    }
+    .btn-copy:active { transform: scale(0.97); }
+    .btn-copy:disabled { background: #ccc; box-shadow: none; }
+    .copy-note { font-size: 11px; color: #bbb; text-align: center; line-height: 1.7; }
+
+    /* ===== Modal ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 24px 24px 0 0;
+      padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+      width: 100%;
+      max-width: 500px;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px; }
+    .modal-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .modal-field { flex: 1; }
+    .modal-label { font-size: 11px; color: #aaa; font-weight: 600; margin-bottom: 6px; }
+    .modal-input {
+      width: 100%;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      color: #1a1a1a;
+      outline: none;
+    }
+    .modal-input:focus { border-color: #27ae60; }
+    .modal-btns { display: flex; gap: 10px; }
+    .modal-btn {
+      flex: 1; padding: 14px;
+      border: none; border-radius: 12px;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer;
+    }
+    .modal-btn-cancel { background: #f0f0f0; color: #888; }
+    .modal-btn-save { background: #27ae60; color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- ===== 今日タブ ===== -->
+<div class="page active" id="page-today">
+  <div class="page-header">
+    <div class="page-title" id="today-title">勤怠記録</div>
+    <div class="page-sub" id="today-date"></div>
+  </div>
+
+  <div class="time-card">
+    <div class="time-item">
+      <div class="time-label">始業</div>
+      <div class="time-value empty" id="disp-start" onclick="openEditToday('start')">--:--</div>
+    </div>
+    <div class="time-divider">–</div>
+    <div class="time-item">
+      <div class="time-label">終業</div>
+      <div class="time-value empty" id="disp-end" onclick="openEditToday('end')">--:--</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-start" id="btn-start" onclick="recordNow('start')">🟢 始業</button>
+    <button class="btn btn-end"   id="btn-end"   onclick="recordNow('end')">🔴 終業</button>
+  </div>
+  <div class="status-msg" id="status-msg"></div>
+</div>
+
+<!-- ===== カレンダータブ ===== -->
+<div class="page" id="page-calendar">
+  <div class="cal-nav">
+    <button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button>
+    <div class="cal-month-label" id="cal-month-label"></div>
+    <button class="cal-nav-btn" onclick="changeMonth(1)">›</button>
+  </div>
+  <div class="cal-grid" id="cal-grid"></div>
+  <div class="record-list" id="record-list"></div>
+</div>
+
+<!-- ===== Levtechタブ ===== -->
+<div class="page" id="page-levtech">
+  <div class="page-header">
+    <div class="page-title">Levtech に反映</div>
+    <div class="page-sub" id="levtech-month-label"></div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">📎 今月の入力URL</div>
+    <div class="url-row">
+      <input class="url-input" id="url-input" type="url" placeholder="https://platform.levtech.jp/p/workreport/input/XXXXXXX/">
+      <button class="url-save-btn" onclick="saveUrl()">保存</button>
+    </div>
+    <div class="url-hint">月が変わったら新しいURLに更新してください</div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">📊 記録サマリー</div>
+    <div class="summary-row">
+      <span>記録済み</span>
+      <span class="summary-val ok" id="sum-recorded">- 日 / - 日</span>
+    </div>
+    <div class="summary-row">
+      <span>未記録（平日）</span>
+      <span class="summary-val warn" id="sum-missing">-</span>
+    </div>
+    <div class="summary-row">
+      <span>平均始業</span>
+      <span class="summary-val" id="sum-avg-start">-</span>
+    </div>
+    <div class="summary-row">
+      <span>平均終業</span>
+      <span class="summary-val" id="sum-avg-end">-</span>
+    </div>
+  </div>
+
+  <div class="warn-box" id="warn-box" style="display:none"></div>
+
+  <button class="btn-copy" id="btn-copy" onclick="copyBookmarklet()" disabled>📋 ブックマークレットをコピー</button>
+  <div class="copy-note">PCブラウザでLevtechを開いてから<br>コピーしたコードをアドレスバーに貼り付けて実行</div>
+</div>
+
+<!-- ===== タブバー ===== -->
+<div id="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('today')" id="tab-today">
+    <span class="icon">⏱</span>今日
+  </button>
+  <button class="tab-btn" onclick="switchTab('calendar')" id="tab-calendar">
+    <span class="icon">📅</span>カレンダー
+  </button>
+  <button class="tab-btn" onclick="switchTab('levtech')" id="tab-levtech">
+    <span class="icon">📋</span>Levtech
+  </button>
+</div>
+
+<!-- ===== 時刻編集モーダル ===== -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">時刻を編集</div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <div class="modal-label">始業</div>
+        <input class="modal-input" id="modal-start" type="time">
+      </div>
+      <div class="modal-field">
+        <div class="modal-label">終業</div>
+        <input class="modal-input" id="modal-end" type="time">
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn modal-btn-cancel" onclick="closeModalDirect()">キャンセル</button>
+      <button class="modal-btn modal-btn-save" onclick="saveModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================================================
+// 設定
+// ===================================================
+// GASデプロイ後にURLを貼り付けてください
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxh2lnixVAKY5kDSaZn7JT50JnCnvgmWTfxTX5SahVBHssn0JiemasCBY71k5rs5ssTfQ/exec';
+
+// ===================================================
+// 状態
+// ===================================================
+let records = {};      // { 'YYYY-MM-DD': { start, end } }
+let holidays = {};     // { 'YYYY-MM-DD': '祝日名' }
+let calYear = 0;
+let calMonth = 0;      // 0-indexed
+let modalDate = null;  // 編集中の日付
+let modalField = null; // 'start' | 'end' | 'both'
+let currentLevtechUrl = '';
+
+const today = new Date();
+const todayStr = fmt(today);
+
+// ===================================================
+// 初期化
+// ===================================================
+async function init() {
+  // 今日タブの日付表示
+  const weekdays = ['日','月','火','水','木','金','土'];
+  document.getElementById('today-date').textContent =
+    `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${weekdays[today.getDay()]}）`;
+
+  calYear  = today.getFullYear();
+  calMonth = today.getMonth();
+
+  // 祝日ロード（内閣府CSV → localStorageキャッシュ）
+  await loadHolidays();
+
+  // データロード
+  const monthKey = toMonthKey(calYear, calMonth);
+  await loadRecords(monthKey);
+  loadTodayDisplay();
+  renderCalendar();
+
+  // Levtechタブ
+  await loadLevtechTab();
+
+  // Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+}
+
+// ===================================================
+// GAS 通信
+// ===================================================
+async function gasGet(params) {
+  if (!GAS_URL) return null;
+  const url = GAS_URL + '?' + new URLSearchParams(params);
+  try {
+    const res = await fetch(url);
+    return await res.json();
+  } catch(e) {
+    console.warn('GAS GET error', e);
+    return null;
+  }
+}
+
+async function gasPost(data) {
+  if (!GAS_URL) return null;
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return await res.json();
+  } catch(e) {
+    console.warn('GAS POST error', e);
+    return null;
+  }
+}
+
+// ===================================================
+// 記録のロード・保存
+// ===================================================
+async function loadRecords(monthKey) {
+  // まずlocalStorageから読み込み
+  const cached = localStorage.getItem('records_' + monthKey);
+  if (cached) {
+    const arr = JSON.parse(cached);
+    arr.forEach(r => { records[r.date] = { start: r.start, end: r.end }; });
+  }
+
+  // GASから最新取得
+  if (GAS_URL) {
+    const data = await gasGet({ month: monthKey });
+    if (data && data.records) {
+      data.records.forEach(r => { records[r.date] = { start: r.start, end: r.end }; });
+      localStorage.setItem('records_' + monthKey, JSON.stringify(data.records));
+    }
+  }
+}
+
+async function saveRecord(date, start, end) {
+  records[date] = { start, end };
+
+  // localStorageに即保存
+  const monthKey = date.substring(0, 7);
+  const arr = Object.entries(records)
+    .filter(([k]) => k.startsWith(monthKey))
+    .map(([k, v]) => ({ date: k, ...v }));
+  localStorage.setItem('records_' + monthKey, JSON.stringify(arr));
+
+  // GASに非同期保存
+  gasPost({ date, start, end });
+}
+
+// ===================================================
+// 祝日
+// ===================================================
+async function loadHolidays() {
+  const cacheKey = 'holidays_v1';
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    holidays = JSON.parse(cached);
+    return;
+  }
+
+  try {
+    const res = await fetch('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv');
+    const text = await res.text();
+    const parsed = {};
+    text.split('\n').slice(1).forEach(line => {
+      const cols = line.trim().split(',');
+      if (cols.length < 2) return;
+      // CSV形式: MM/DD/YYYY または YYYY/MM/DD
+      const raw = cols[0].trim();
+      const parts = raw.split('/');
+      let dateStr = '';
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          dateStr = `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+        } else {
+          dateStr = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+        }
+      }
+      if (dateStr) parsed[dateStr] = cols[1].trim();
+    });
+    holidays = parsed;
+    localStorage.setItem(cacheKey, JSON.stringify(parsed));
+  } catch(e) {
+    // フォールバック: 2025・2026年の主な祝日
+    holidays = {
+      '2025-01-01':'元日','2025-01-13':'成人の日','2025-02-11':'建国記念の日',
+      '2025-02-23':'天皇誕生日','2025-02-24':'振替休日','2025-03-20':'春分の日',
+      '2025-04-29':'昭和の日','2025-05-03':'憲法記念日','2025-05-04':'みどりの日',
+      '2025-05-05':'こどもの日','2025-05-06':'振替休日','2025-07-21':'海の日',
+      '2025-08-11':'山の日','2025-09-15':'敬老の日','2025-09-23':'秋分の日',
+      '2025-10-13':'スポーツの日','2025-11-03':'文化の日','2025-11-23':'勤労感謝の日',
+      '2025-11-24':'振替休日',
+      '2026-01-01':'元日','2026-01-12':'成人の日','2026-02-11':'建国記念の日',
+      '2026-02-23':'天皇誕生日','2026-03-20':'春分の日','2026-04-29':'昭和の日',
+      '2026-05-03':'憲法記念日','2026-05-04':'みどりの日','2026-05-05':'こどもの日',
+      '2026-07-20':'海の日','2026-08-11':'山の日','2026-09-21':'敬老の日',
+      '2026-09-23':'秋分の日','2026-10-12':'スポーツの日','2026-11-03':'文化の日',
+      '2026-11-23':'勤労感謝の日'
+    };
+  }
+}
+
+function isHoliday(dateStr) {
+  return !!holidays[dateStr];
+}
+
+function isWeekend(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.getDay() === 0 || d.getDay() === 6;
+}
+
+function isWorkday(dateStr) {
+  return !isWeekend(dateStr) && !isHoliday(dateStr);
+}
+
+// ===================================================
+// 今日タブ
+// ===================================================
+function loadTodayDisplay() {
+  const rec = records[todayStr] || {};
+  updateTodayDisplay(rec.start || '', rec.end || '');
+}
+
+function updateTodayDisplay(start, end) {
+  const startEl = document.getElementById('disp-start');
+  const endEl   = document.getElementById('disp-end');
+
+  if (start) {
+    startEl.textContent = start;
+    startEl.classList.remove('empty');
+  } else {
+    startEl.textContent = '--:--';
+    startEl.classList.add('empty');
+  }
+  if (end) {
+    endEl.textContent = end;
+    endEl.classList.remove('empty');
+  } else {
+    endEl.textContent = '--:--';
+    endEl.classList.add('empty');
+  }
+}
+
+function recordNow(type) {
+  const time = roundUpTo15(new Date());
+  const rec = records[todayStr] || {};
+  if (type === 'start') rec.start = time;
+  else                  rec.end   = time;
+
+  saveRecord(todayStr, rec.start || '', rec.end || '');
+  updateTodayDisplay(rec.start || '', rec.end || '');
+
+  const label = type === 'start' ? '始業' : '終業';
+  document.getElementById('status-msg').textContent = `${time} で${label}を記録しました`;
+  setTimeout(() => { document.getElementById('status-msg').textContent = ''; }, 3000);
+
+  renderCalendar();
+  if (document.getElementById('page-levtech').classList.contains('active')) updateLevtechSummary();
+}
+
+function openEditToday(field) {
+  const rec = records[todayStr] || {};
+  openModal(todayStr, field, rec.start || '', rec.end || '');
+}
+
+// ===================================================
+// カレンダータブ
+// ===================================================
+function renderCalendar() {
+  const monthKey = toMonthKey(calYear, calMonth);
+  document.getElementById('cal-month-label').textContent =
+    `${calYear}年${calMonth + 1}月`;
+
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+
+  // 曜日ヘッダー
+  ['日','月','火','水','木','金','土'].forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'cal-day-name';
+    el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  // 月初の曜日
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  for (let i = 0; i < firstDay; i++) {
+    const el = document.createElement('div');
+    el.className = 'cal-cell empty';
+    grid.appendChild(el);
+  }
+
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const rec = records[dateStr];
+    const weekend = isWeekend(dateStr);
+    const holiday = isHoliday(dateStr);
+
+    const el = document.createElement('div');
+    el.className = 'cal-cell';
+    if (dateStr === todayStr) el.classList.add('today');
+    else if (rec && (rec.start || rec.end)) el.classList.add('recorded');
+    else if (weekend) el.classList.add('weekend');
+    else if (holiday) el.classList.add('holiday');
+
+    el.innerHTML = `<span>${d}</span>`;
+    if (rec && (rec.start || rec.end)) {
+      const dot = document.createElement('div');
+      dot.className = 'cal-dot';
+      el.appendChild(dot);
+    }
+
+    if (!weekend && !holiday) {
+      el.onclick = () => {
+        const r = records[dateStr] || {};
+        openModal(dateStr, 'both', r.start || '', r.end || '');
+      };
+    }
+
+    grid.appendChild(el);
+  }
+
+  // 記録リスト（直近から最大10件）
+  renderRecordList(calYear, calMonth);
+}
+
+function renderRecordList(year, month) {
+  const list = document.getElementById('record-list');
+  list.innerHTML = '';
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days = [];
+  for (let d = daysInMonth; d >= 1; d--) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (records[dateStr] && (records[dateStr].start || records[dateStr].end)) {
+      days.push(dateStr);
+    }
+    if (days.length >= 10) break;
+  }
+
+  if (days.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'text-align:center;color:#bbb;font-size:13px;padding:20px';
+    empty.textContent = '記録がありません';
+    list.appendChild(empty);
+    return;
+  }
+
+  days.forEach(dateStr => {
+    const rec = records[dateStr];
+    const d = new Date(dateStr + 'T00:00:00');
+    const weekdays = ['日','月','火','水','木','金','土'];
+    const label = `${d.getMonth()+1}/${d.getDate()} ${weekdays[d.getDay()]}`;
+
+    const item = document.createElement('div');
+    item.className = 'record-item';
+
+    const partial = !rec.start || !rec.end;
+    const timesStr = `${rec.start || '--:--'} – ${rec.end || '--:--'}`;
+
+    item.innerHTML = `
+      <div class="record-date">${label}</div>
+      <div class="record-times${partial ? ' partial' : ''}">${timesStr}</div>
+      <button class="record-edit-btn" onclick="openModalFromList('${dateStr}')">✏️</button>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function changeMonth(delta) {
+  calMonth += delta;
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  if (calMonth > 11) { calMonth = 0;  calYear++; }
+  const monthKey = toMonthKey(calYear, calMonth);
+  loadRecords(monthKey).then(() => renderCalendar());
+}
+
+function openModalFromList(dateStr) {
+  const rec = records[dateStr] || {};
+  openModal(dateStr, 'both', rec.start || '', rec.end || '');
+}
+
+// ===================================================
+// Levtechタブ
+// ===================================================
+async function loadLevtechTab() {
+  const monthKey = toMonthKey(today.getFullYear(), today.getMonth());
+  document.getElementById('levtech-month-label').textContent =
+    `${today.getFullYear()}年${today.getMonth()+1}月分`;
+
+  // URL読み込み
+  const cachedUrl = localStorage.getItem('levtech_url_' + monthKey) || '';
+  if (cachedUrl) {
+    document.getElementById('url-input').value = cachedUrl;
+    currentLevtechUrl = cachedUrl;
+  }
+  if (GAS_URL) {
+    const data = await gasGet({ action: 'settings', month: monthKey });
+    if (data && data.url) {
+      document.getElementById('url-input').value = data.url;
+      currentLevtechUrl = data.url;
+      localStorage.setItem('levtech_url_' + monthKey, data.url);
+    }
+  }
+
+  updateLevtechSummary();
+}
+
+function updateLevtechSummary() {
+  const year  = today.getFullYear();
+  const month = today.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let workdays = 0;
+  let recorded = 0;
+  let missingDays = [];
+  let startMins = [], endMins = [];
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (!isWorkday(dateStr)) continue;
+    workdays++;
+    const rec = records[dateStr];
+    if (rec && rec.start && rec.end) {
+      recorded++;
+      startMins.push(timeToMins(rec.start));
+      endMins.push(timeToMins(rec.end));
+    } else if (!rec || (!rec.start && !rec.end)) {
+      // 未来の平日は警告しない
+      if (new Date(dateStr + 'T00:00:00') <= today) {
+        missingDays.push(dateStr);
+      }
+    }
+  }
+
+  document.getElementById('sum-recorded').textContent = `${recorded}日 / ${workdays}日`;
+  document.getElementById('sum-missing').textContent  = missingDays.length > 0 ? `${missingDays.length}日` : 'なし';
+
+  const avgStart = startMins.length > 0 ? minsToTime(Math.round(startMins.reduce((a,b)=>a+b,0)/startMins.length)) : '-';
+  const avgEnd   = endMins.length > 0   ? minsToTime(Math.round(endMins.reduce((a,b)=>a+b,0)/endMins.length))   : '-';
+  document.getElementById('sum-avg-start').textContent = avgStart;
+  document.getElementById('sum-avg-end').textContent   = avgEnd;
+
+  const warnBox = document.getElementById('warn-box');
+  if (missingDays.length > 0) {
+    warnBox.style.display = '';
+    warnBox.textContent = `⚠️ 未記録の平日が${missingDays.length}日あります。月末前に入力してください。`;
+  } else {
+    warnBox.style.display = 'none';
+  }
+
+  document.getElementById('btn-copy').disabled = !currentLevtechUrl;
+}
+
+async function saveUrl() {
+  const url = document.getElementById('url-input').value.trim();
+  currentLevtechUrl = url;
+  const monthKey = toMonthKey(today.getFullYear(), today.getMonth());
+  localStorage.setItem('levtech_url_' + monthKey, url);
+  gasPost({ action: 'settings', month: monthKey, url });
+  updateLevtechSummary();
+  alert('URLを保存しました');
+}
+
+// ===================================================
+// ブックマークレット生成
+// ===================================================
+function copyBookmarklet() {
+  const year  = today.getFullYear();
+  const month = today.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const data = {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const rec = records[dateStr];
+    if (rec && (rec.start || rec.end)) {
+      const mm = String(month+1).padStart(2,'0');
+      const dd = String(d).padStart(2,'0');
+      data[`${mm}/${dd}`] = { start: rec.start || '', end: rec.end || '' };
+    }
+  }
+
+  const dataJson = JSON.stringify(data);
+
+  const code = `javascript:(function(){
+var data=${dataJson};
+var rows=Array.from(document.querySelectorAll('tr'));
+var count=0;
+var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+function setVal(input,val){
+  if(!input||!val)return;
+  s.call(input,val);
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+  input.dispatchEvent(new Event('change',{bubbles:true}));
+}
+rows.forEach(function(row){
+  var text=row.textContent.replace(/\\s/g,'');
+  Object.keys(data).forEach(function(label){
+    if(text.includes(label)){
+      var inputs=row.querySelectorAll('input[type=text],input:not([type])');
+      if(inputs.length>=2){
+        setVal(inputs[0],data[label].start);
+        setVal(inputs[1],data[label].end);
+        count++;
+      }
+    }
+  });
+});
+alert('✅ '+count+'日分を入力しました');
+})();`.replace(/\n/g, '');
+
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(() => {
+      alert('コピーしました！\nPCブラウザでLevtechを開き、アドレスバーに貼り付けてEnterを押してください。');
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = code;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    alert('コピーしました！');
+  }
+}
+
+// ===================================================
+// モーダル
+// ===================================================
+function openModal(date, field, start, end) {
+  modalDate  = date;
+  modalField = field;
+  const d = new Date(date + 'T00:00:00');
+  const weekdays = ['日','月','火','水','木','金','土'];
+  document.getElementById('modal-title').textContent =
+    `${d.getMonth()+1}/${d.getDate()}（${weekdays[d.getDay()]}）を編集`;
+  document.getElementById('modal-start').value = start;
+  document.getElementById('modal-end').value   = end;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(event) {
+  if (event.target === document.getElementById('modal')) closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('modal').classList.remove('open');
+  modalDate = null;
+}
+
+async function saveModal() {
+  if (!modalDate) return;
+  const start = document.getElementById('modal-start').value;
+  const end   = document.getElementById('modal-end').value;
+
+  await saveRecord(modalDate, start, end);
+
+  if (modalDate === todayStr) updateTodayDisplay(start, end);
+  renderCalendar();
+  if (document.getElementById('page-levtech').classList.contains('active')) updateLevtechSummary();
+
+  closeModalDirect();
+}
+
+// ===================================================
+// タブ切り替え
+// ===================================================
+function switchTab(name) {
+  ['today','calendar','levtech'].forEach(n => {
+    document.getElementById('page-' + n).classList.toggle('active', n === name);
+    document.getElementById('tab-' + n).classList.toggle('active', n === name);
+  });
+  if (name === 'levtech') updateLevtechSummary();
+}
+
+// ===================================================
+// ユーティリティ
+// ===================================================
+function fmt(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+function toMonthKey(year, month) {
+  return `${year}-${String(month+1).padStart(2,'0')}`;
+}
+
+function roundUpTo15(date) {
+  const ms = date.getTime();
+  const interval = 15 * 60 * 1000;
+  const rounded = new Date(Math.ceil(ms / interval) * interval);
+  return `${String(rounded.getHours()).padStart(2,'0')}:${String(rounded.getMinutes()).padStart(2,'0')}`;
+}
+
+function timeToMins(t) {
+  if (!t) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minsToTime(mins) {
+  return `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+}
+
+// ===================================================
+// 起動
+// ===================================================
+init();
+</script>
+</body>
+</html>
